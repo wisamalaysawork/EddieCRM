@@ -1,0 +1,206 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Entity type for Client, Source, Partner
+enum EntityType {
+  INDIVIDUAL
+  COMPANY
+}
+
+// Deal status workflow
+enum DealStatus {
+  NEW
+  IN_PROGRESS
+  DELIVERED
+  CLOSED
+  PAID
+}
+
+// Commission types for source
+enum CommissionType {
+  ONE_TIME
+  MONTHLY
+  PERCENTAGE
+}
+
+// Partner payment types
+enum PartnerPaymentType {
+  ONE_TIME
+  MONTHLY
+}
+
+// Client payment types (how client pays Eddie)
+enum ClientPaymentType {
+  ONE_TIME
+  MONTHLY
+}
+
+// Payment types
+enum PaymentType {
+  CLIENT_PAYMENT      // Client pays Eddie
+  SOURCE_COMMISSION   // Eddie pays Source
+  PARTNER_PAYMENT     // Eddie pays Partner
+}
+
+// Payment status
+enum PaymentStatus {
+  PENDING
+  PAID
+  OVERDUE
+}
+
+// Client: End customer who gives projects (pays Eddie)
+model Client {
+  id                  String              @id @default(cuid())
+  name                String
+  type                EntityType          @default(INDIVIDUAL)
+  contactPhone        String?
+  contactEmail        String?
+  contactAddress      String?
+  notes               String?
+  isActive            Boolean             @default(true)
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  deals               Deal[]
+  payments            Payment[]
+}
+
+// Source: Entity that brings projects from clients and receives commission from Eddie
+model Source {
+  id                  String              @id @default(cuid())
+  name                String
+  type                EntityType          @default(INDIVIDUAL)
+  contactPhone        String?
+  contactEmail        String?
+  contactAddress      String?
+  notes               String?
+  isActive            Boolean             @default(true)
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  deals               Deal[]
+  payments            Payment[]
+}
+
+// Partner: Entity that executes projects and is paid by Eddie
+model Partner {
+  id                  String              @id @default(cuid())
+  name                String
+  type                EntityType          @default(INDIVIDUAL)
+  contactPhone        String?
+  contactEmail        String?
+  contactAddress      String?
+  notes               String?
+  isActive            Boolean             @default(true)
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  deals               Deal[]
+  payments            Payment[]
+}
+
+// Deal/Project: Central record linking Client → Source → Partner
+// Flow: Client → Source → Eddie → Partner
+model Deal {
+  id                      String              @id @default(cuid())
+  name                    String
+  status                  DealStatus          @default(NEW)
+  
+  // Client financials (what client pays Eddie)
+  clientPaymentAmount     Float               @default(0)
+  clientPaymentType       ClientPaymentType   @default(ONE_TIME)
+  clientPaymentDueDate    DateTime?           // For one-time payment
+  clientPaymentMonths     Int?                // Number of months for monthly payment
+  clientPaymentStartDate  DateTime?           // First payment date for monthly
+  
+  // Source financials (commission Eddie pays to Source)
+  commissionType          CommissionType      @default(ONE_TIME)
+  commissionValue         Float               @default(0) // Amount or percentage
+  commissionDueDate       DateTime?           // For one-time
+  commissionMonths        Int?                // Number of months for monthly commission
+  commissionStartDate     DateTime?           // First payment date for monthly
+  
+  // Partner financials (what Eddie pays partner)
+  partnerCost             Float               @default(0)
+  partnerPaymentType      PartnerPaymentType  @default(ONE_TIME)
+  partnerPaymentDueDate   DateTime?           // For one-time payment
+  partnerPaymentMonths    Int?                // Number of months for monthly payment
+  partnerPaymentStartDate DateTime?           // First payment date for monthly
+  
+  // Internal notes
+  notes                   String?
+  
+  // Relations
+  clientId                String?
+  client                  Client?             @relation(fields: [clientId], references: [id])
+  sourceId                String?
+  source                  Source?             @relation(fields: [sourceId], references: [id])
+  partnerId               String?
+  partner                 Partner?            @relation(fields: [partnerId], references: [id])
+  
+  createdAt               DateTime            @default(now())
+  updatedAt               DateTime            @updatedAt
+  
+  payments                Payment[]
+  reminders               PaymentReminder[]
+}
+
+// Payment Record: Individual payment events
+model Payment {
+  id                      String              @id @default(cuid())
+  type                    PaymentType         @default(CLIENT_PAYMENT)
+  amount                  Float
+  dueDate                 DateTime
+  paidDate                DateTime?
+  status                  PaymentStatus       @default(PENDING)
+  notes                   String?             // Reference numbers, bank details
+  
+  dealId                  String
+  deal                    Deal                @relation(fields: [dealId], references: [id])
+  
+  clientId                String?
+  client                  Client?             @relation(fields: [clientId], references: [id])
+  
+  sourceId                String?
+  source                  Source?             @relation(fields: [sourceId], references: [id])
+  
+  partnerId               String?
+  partner                 Partner?            @relation(fields: [partnerId], references: [id])
+  
+  createdAt               DateTime            @default(now())
+  updatedAt               DateTime            @updatedAt
+}
+
+// Payment Reminder: Configurable reminders for payments
+model PaymentReminder {
+  id                      String              @id @default(cuid())
+  daysBefore              Int                 // Days before due date to send reminder
+  email                   String              // Email address to send to
+  sentAt                  DateTime?           // When reminder was sent
+  isActive                Boolean             @default(true)
+  
+  dealId                  String
+  deal                    Deal                @relation(fields: [dealId], references: [id])
+  
+  createdAt               DateTime            @default(now())
+  updatedAt               DateTime            @updatedAt
+}
+
+// Audit Log: Track financial changes
+model AuditLog {
+  id                      String              @id @default(cuid())
+  action                  String              // CREATE, UPDATE, DELETE, MARK_PAID
+  entityType              String              // DEAL, PAYMENT, SOURCE, PARTNER, CLIENT
+  entityId                String
+  userId                  String?
+  oldValue                String?             // JSON of old values
+  newValue                String?             // JSON of new values
+  createdAt               DateTime            @default(now())
+}
