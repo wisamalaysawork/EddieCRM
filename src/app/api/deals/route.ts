@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
+import { Prisma } from "@prisma/client"
 
 // GET /api/deals - List all deals
 export async function GET(request: Request) {
@@ -109,9 +110,10 @@ async function createClientPayments(
   clientPaymentType: string,
   clientPaymentDueDate: Date | null,
   clientPaymentMonths: number | null,
-  clientPaymentStartDate: Date | null
+  clientPaymentStartDate: Date | null,
+  clientProgressMilestones?: string | null
 ) {
-  const payments = []
+  const payments: Prisma.PaymentCreateManyInput[] = []
 
   if (clientPaymentType === "ONE_TIME") {
     payments.push({
@@ -123,9 +125,8 @@ async function createClientPayments(
       status: "PENDING" as const,
     })
   } else if (clientPaymentType === "MONTHLY") {
-    // clientPaymentAmount is the MONTHLY amount, NOT the total
     const months = clientPaymentMonths || 12
-    const monthlyAmount = clientPaymentAmount // Use directly, don't divide
+    const monthlyAmount = clientPaymentAmount
     const start = clientPaymentStartDate ? new Date(clientPaymentStartDate) : new Date()
 
     for (let i = 0; i < months; i++) {
@@ -140,6 +141,28 @@ async function createClientPayments(
         clientId,
         status: "PENDING" as const,
       })
+    }
+  } else if (clientPaymentType === "MULTI_PAYMENT" && clientProgressMilestones) {
+    try {
+      const milestones = JSON.parse(clientProgressMilestones) as Array<{ percent: number; amount: number }>
+      const start = clientPaymentStartDate ? new Date(clientPaymentStartDate) : new Date()
+
+      milestones.forEach((milestone, index) => {
+        const dueDate = new Date(start)
+        dueDate.setDate(dueDate.getDate() + index) // Stagger by day initially
+
+        payments.push({
+          dealId,
+          type: "CLIENT_PAYMENT" as const,
+          amount: milestone.amount,
+          dueDate,
+          clientId,
+          status: "PENDING" as const,
+          notes: `Milestone: ${milestone.percent}% completion`,
+        })
+      })
+    } catch (e) {
+      console.error("Failed to parse client milestones:", e)
     }
   }
 
@@ -157,9 +180,10 @@ async function createCommissionPayments(
   clientPaymentAmount: number,
   commissionDueDate: Date | null,
   commissionMonths: number | null,
-  commissionStartDate: Date | null
+  commissionStartDate: Date | null,
+  commissionProgressMilestones?: string | null
 ) {
-  const payments = []
+  const payments: Prisma.PaymentCreateManyInput[] = []
 
   let commissionAmount = commissionValue
   if (commissionType === "PERCENTAGE") {
@@ -186,11 +210,33 @@ async function createCommissionPayments(
       payments.push({
         dealId,
         type: "SOURCE_COMMISSION" as const,
-        amount: commissionValue, // Monthly amount
+        amount: commissionValue,
         dueDate,
         sourceId,
         status: "PENDING" as const,
       })
+    }
+  } else if (commissionType === "MULTI_PAYMENT" && commissionProgressMilestones) {
+    try {
+      const milestones = JSON.parse(commissionProgressMilestones) as Array<{ percent: number; amount: number }>
+      const start = commissionStartDate ? new Date(commissionStartDate) : new Date()
+
+      milestones.forEach((milestone, index) => {
+        const dueDate = new Date(start)
+        dueDate.setDate(dueDate.getDate() + index)
+
+        payments.push({
+          dealId,
+          type: "SOURCE_COMMISSION" as const,
+          amount: milestone.amount,
+          dueDate,
+          sourceId,
+          status: "PENDING" as const,
+          notes: `Milestone: ${milestone.percent}% completion`,
+        })
+      })
+    } catch (e) {
+      console.error("Failed to parse commission milestones:", e)
     }
   }
 
@@ -207,9 +253,10 @@ async function createPartnerPayments(
   partnerPaymentType: string,
   partnerPaymentDueDate: Date | null,
   partnerPaymentMonths: number | null,
-  partnerPaymentStartDate: Date | null
+  partnerPaymentStartDate: Date | null,
+  partnerProgressMilestones?: string | null
 ) {
-  const payments = []
+  const payments: Prisma.PaymentCreateManyInput[] = []
 
   if (partnerPaymentType === "ONE_TIME") {
     payments.push({
@@ -221,9 +268,8 @@ async function createPartnerPayments(
       status: "PENDING" as const,
     })
   } else if (partnerPaymentType === "MONTHLY") {
-    // partnerCost is the MONTHLY amount, NOT the total
     const months = partnerPaymentMonths || 12
-    const monthlyAmount = partnerCost // Use directly, don't divide
+    const monthlyAmount = partnerCost
     const start = partnerPaymentStartDate ? new Date(partnerPaymentStartDate) : new Date()
 
     for (let i = 0; i < months; i++) {
@@ -238,6 +284,28 @@ async function createPartnerPayments(
         partnerId,
         status: "PENDING" as const,
       })
+    }
+  } else if (partnerPaymentType === "MULTI_PAYMENT" && partnerProgressMilestones) {
+    try {
+      const milestones = JSON.parse(partnerProgressMilestones) as Array<{ percent: number; amount: number }>
+      const start = partnerPaymentStartDate ? new Date(partnerPaymentStartDate) : new Date()
+
+      milestones.forEach((milestone, index) => {
+        const dueDate = new Date(start)
+        dueDate.setDate(dueDate.getDate() + index)
+
+        payments.push({
+          dealId,
+          type: "PARTNER_PAYMENT" as const,
+          amount: milestone.amount,
+          dueDate,
+          partnerId,
+          status: "PENDING" as const,
+          notes: `Milestone: ${milestone.percent}% completion`,
+        })
+      })
+    } catch (e) {
+      console.error("Failed to parse partner milestones:", e)
     }
   }
 
@@ -274,6 +342,10 @@ export async function POST(request: Request) {
       partnerPaymentDueDate,
       partnerPaymentMonths,
       partnerPaymentStartDate,
+      // Multi-payment milestone fields
+      clientProgressMilestones,
+      commissionProgressMilestones,
+      partnerProgressMilestones,
     } = body
 
     if (!name) {
@@ -322,6 +394,10 @@ export async function POST(request: Request) {
         partnerPaymentDueDate: parsedPartnerPaymentDueDate,
         partnerPaymentMonths: parsedPartnerPaymentMonths,
         partnerPaymentStartDate: parsedPartnerPaymentStartDate,
+        // Milestone data
+        clientProgressMilestones: clientProgressMilestones || null,
+        commissionProgressMilestones: commissionProgressMilestones || null,
+        partnerProgressMilestones: partnerProgressMilestones || null,
         // Notes
         notes,
       },
@@ -341,7 +417,19 @@ export async function POST(request: Request) {
         clientPaymentType || "ONE_TIME",
         parsedClientPaymentDueDate,
         parsedClientPaymentMonths,
-        parsedClientPaymentStartDate
+        parsedClientPaymentStartDate,
+        clientProgressMilestones
+      )
+    } else if (clientPaymentType === "MULTI_PAYMENT" && clientId && clientProgressMilestones) {
+      await createClientPayments(
+        deal.id,
+        clientId,
+        0,
+        "MULTI_PAYMENT",
+        null,
+        null,
+        parsedClientPaymentStartDate,
+        clientProgressMilestones
       )
     }
 
@@ -355,7 +443,20 @@ export async function POST(request: Request) {
         parsedClientPaymentAmount,
         parsedCommissionDueDate,
         parsedCommissionMonths,
-        parsedCommissionStartDate
+        parsedCommissionStartDate,
+        commissionProgressMilestones
+      )
+    } else if (commissionType === "MULTI_PAYMENT" && sourceId && commissionProgressMilestones) {
+      await createCommissionPayments(
+        deal.id,
+        sourceId,
+        "MULTI_PAYMENT",
+        0,
+        parsedClientPaymentAmount,
+        null,
+        null,
+        parsedCommissionStartDate,
+        commissionProgressMilestones
       )
     }
 
@@ -368,7 +469,19 @@ export async function POST(request: Request) {
         partnerPaymentType || "ONE_TIME",
         parsedPartnerPaymentDueDate,
         parsedPartnerPaymentMonths,
-        parsedPartnerPaymentStartDate
+        parsedPartnerPaymentStartDate,
+        partnerProgressMilestones
+      )
+    } else if (partnerPaymentType === "MULTI_PAYMENT" && partnerId && partnerProgressMilestones) {
+      await createPartnerPayments(
+        deal.id,
+        partnerId,
+        0,
+        "MULTI_PAYMENT",
+        null,
+        null,
+        parsedPartnerPaymentStartDate,
+        partnerProgressMilestones
       )
     }
 

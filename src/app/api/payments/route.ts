@@ -26,7 +26,14 @@ export async function GET(request: Request) {
       where: whereClause,
       include: {
         deal: {
-          select: { id: true, name: true, status: true },
+          select: {
+            id: true,
+            name: true,
+            status: true,
+            clientPaymentType: true,
+            commissionType: true,
+            partnerPaymentType: true
+          },
         },
         client: {
           select: { id: true, name: true },

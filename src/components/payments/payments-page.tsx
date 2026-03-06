@@ -47,6 +47,9 @@ interface Payment {
     id: string
     name: string
     status: string
+    clientPaymentType?: string
+    commissionType?: string
+    partnerPaymentType?: string
   }
   client?: {
     id: string
@@ -68,6 +71,7 @@ export function PaymentsPage() {
   const [search, setSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState<"all" | "PENDING" | "PAID" | "OVERDUE">("all")
   const [typeFilter, setTypeFilter] = useState<"all" | "CLIENT_PAYMENT" | "SOURCE_COMMISSION" | "PARTNER_PAYMENT">("all")
+  const [agreementTypeFilter, setAgreementTypeFilter] = useState<"all" | "ONE_TIME" | "MONTHLY" | "MULTI_PAYMENT" | "PERCENTAGE">("all")
   const [markPaidId, setMarkPaidId] = useState<string | null>(null)
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc")
 
@@ -108,6 +112,19 @@ export function PaymentsPage() {
     },
   })
 
+  const getAgreementType = (payment: Payment) => {
+    switch (payment.type) {
+      case "CLIENT_PAYMENT":
+        return payment.deal.clientPaymentType || "ONE_TIME"
+      case "SOURCE_COMMISSION":
+        return payment.deal.commissionType || "ONE_TIME"
+      case "PARTNER_PAYMENT":
+        return payment.deal.partnerPaymentType || "ONE_TIME"
+      default:
+        return "ONE_TIME"
+    }
+  }
+
   const filteredPayments = payments
     ?.filter((payment) => {
       const matchesSearch =
@@ -117,7 +134,8 @@ export function PaymentsPage() {
         payment.partner?.name.toLowerCase().includes(search.toLowerCase())
       const matchesStatus = statusFilter === "all" || payment.status === statusFilter
       const matchesType = typeFilter === "all" || payment.type === typeFilter
-      return matchesSearch && matchesStatus && matchesType
+      const matchesAgreement = agreementTypeFilter === "all" || getAgreementType(payment) === agreementTypeFilter
+      return matchesSearch && matchesStatus && matchesType && matchesAgreement
     })
     .sort((a, b) => {
       const dateA = new Date(a.dueDate).getTime()
@@ -334,13 +352,25 @@ export function PaymentsPage() {
             </Select>
             <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as typeof typeFilter)}>
               <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Type" />
+                <SelectValue placeholder="Party" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Types</SelectItem>
+                <SelectItem value="all">All Parties</SelectItem>
                 <SelectItem value="CLIENT_PAYMENT">Client Payment</SelectItem>
                 <SelectItem value="SOURCE_COMMISSION">Source Commission</SelectItem>
                 <SelectItem value="PARTNER_PAYMENT">Partner Payment</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={agreementTypeFilter} onValueChange={(v) => setAgreementTypeFilter(v as typeof agreementTypeFilter)}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Payment Type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Types</SelectItem>
+                <SelectItem value="ONE_TIME">One-Time</SelectItem>
+                <SelectItem value="MONTHLY">Monthly</SelectItem>
+                <SelectItem value="MULTI_PAYMENT">Multi Payments</SelectItem>
+                <SelectItem value="PERCENTAGE">Percentage</SelectItem>
               </SelectContent>
             </Select>
             <Button
@@ -368,6 +398,7 @@ export function PaymentsPage() {
                     <TableHead className="w-[200px] font-semibold">Deal</TableHead>
                     <TableHead className="w-[160px] font-semibold">Type</TableHead>
                     <TableHead className="w-[160px] font-semibold">Party</TableHead>
+                    <TableHead className="w-[180px] font-semibold">Milestone / Notes</TableHead>
                     <TableHead className="w-[130px] font-semibold">Due Date</TableHead>
                     <TableHead className="w-[120px] font-semibold text-right">Amount</TableHead>
                     <TableHead className="w-[110px] font-semibold">Status</TableHead>
@@ -401,6 +432,11 @@ export function PaymentsPage() {
                         <TableCell className="w-[160px]">
                           <span className="line-clamp-1">
                             {getPartyName(payment)}
+                          </span>
+                        </TableCell>
+                        <TableCell className="w-[180px]">
+                          <span className="text-sm text-muted-foreground line-clamp-2" title={payment.notes || ""}>
+                            {payment.notes || "-"}
                           </span>
                         </TableCell>
                         <TableCell className="w-[130px] whitespace-nowrap">

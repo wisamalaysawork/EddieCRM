@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { ThemeToggle } from "@/components/theme-toggle"
 import {
   LayoutDashboard,
   Users,
@@ -100,11 +101,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               <Menu className="w-5 h-5" />
             </Button>
             <div className="flex-1" />
-            <Link href="/settings">
-              <Button variant="ghost" size="icon">
-                <Settings className="w-5 h-5" />
-              </Button>
-            </Link>
+            <div className="flex items-center gap-2">
+              <ThemeToggle />
+              <Link href="/settings">
+                <Button variant="ghost" size="icon">
+                  <Settings className="w-5 h-5" />
+                </Button>
+              </Link>
+            </div>
           </div>
         </header>
 

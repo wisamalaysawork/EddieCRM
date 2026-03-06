@@ -32,9 +32,14 @@ import {
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Plus, Search, Eye, Briefcase } from "lucide-react"
+import { Plus, Search, Eye, Briefcase, Trash2 } from "lucide-react"
 import Link from "next/link"
 import { useToast } from "@/hooks/use-toast"
+
+interface Milestone {
+  percent: string
+  amount: string
+}
 
 interface Deal {
   id: string
@@ -128,12 +133,35 @@ export function DealsPage() {
     notes: "",
   })
 
+  const [clientMilestones, setClientMilestones] = useState<Milestone[]>([{ percent: "0", amount: "" }])
+  const [commissionMilestones, setCommissionMilestones] = useState<Milestone[]>([{ percent: "0", amount: "" }])
+  const [partnerMilestones, setPartnerMilestones] = useState<Milestone[]>([{ percent: "0", amount: "" }])
+
   const createMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
+      const payload: Record<string, unknown> = { ...data }
+      if (data.clientPaymentType === "MULTI_PAYMENT") {
+        payload.clientProgressMilestones = JSON.stringify(
+          clientMilestones.map(m => ({ percent: parseFloat(m.percent) || 0, amount: parseFloat(m.amount) || 0 }))
+        )
+        payload.clientPaymentAmount = clientMilestones.reduce((sum, m) => sum + (parseFloat(m.amount) || 0), 0).toString()
+      }
+      if (data.commissionType === "MULTI_PAYMENT") {
+        payload.commissionProgressMilestones = JSON.stringify(
+          commissionMilestones.map(m => ({ percent: parseFloat(m.percent) || 0, amount: parseFloat(m.amount) || 0 }))
+        )
+        payload.commissionValue = commissionMilestones.reduce((sum, m) => sum + (parseFloat(m.amount) || 0), 0).toString()
+      }
+      if (data.partnerPaymentType === "MULTI_PAYMENT") {
+        payload.partnerProgressMilestones = JSON.stringify(
+          partnerMilestones.map(m => ({ percent: parseFloat(m.percent) || 0, amount: parseFloat(m.amount) || 0 }))
+        )
+        payload.partnerCost = partnerMilestones.reduce((sum, m) => sum + (parseFloat(m.amount) || 0), 0).toString()
+      }
       const res = await fetch("/api/deals", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: JSON.stringify(payload),
       })
       if (!res.ok) {
         const error = await res.json()
@@ -371,17 +399,17 @@ export function DealsPage() {
 
       {/* Create Deal Dialog */}
       <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto w-[95vw]">
           <DialogHeader>
             <DialogTitle>Create New Deal</DialogTitle>
             <DialogDescription>
               Set up a new deal: Client → Source → Partner flow
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-8">
             {/* Project Info */}
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2 md:col-span-2">
+            <div className="grid gap-6 md:grid-cols-3">
+              <div className="space-y-2 md:col-span-3">
                 <Label htmlFor="name">Project Name *</Label>
                 <Input
                   id="name"
@@ -422,7 +450,7 @@ export function DealsPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2 md:col-span-2">
+              <div className="space-y-2">
                 <Label htmlFor="partner">Partner</Label>
                 <Select
                   value={formData.partnerId}
@@ -444,11 +472,11 @@ export function DealsPage() {
             <div className="border-t pt-4">
               <h4 className="font-medium mb-1">Client Payment (Client pays Eddie)</h4>
               <p className="text-sm text-muted-foreground mb-3">
-                {formData.clientPaymentType === "MONTHLY" 
+                {formData.clientPaymentType === "MONTHLY"
                   ? "Enter the <strong>monthly payment amount</strong>. This amount will be paid each month."
                   : "Enter the <strong>total payment amount</strong> for one-time payment."}
               </p>
-              <div className="grid gap-4 md:grid-cols-3">
+              <div className="grid gap-6 md:grid-cols-4">
                 <div className="space-y-2">
                   <Label htmlFor="clientPaymentAmount">
                     {formData.clientPaymentType === "MONTHLY" ? "Monthly Amount" : "Payment Amount"}
@@ -473,6 +501,7 @@ export function DealsPage() {
                     <SelectContent>
                       <SelectItem value="ONE_TIME">One-Time</SelectItem>
                       <SelectItem value="MONTHLY">Monthly</SelectItem>
+                      <SelectItem value="MULTI_PAYMENT">Multi Payments</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -511,6 +540,60 @@ export function DealsPage() {
                     </div>
                   </>
                 )}
+                {formData.clientPaymentType === "MULTI_PAYMENT" && (
+                  <div className="space-y-3 md:col-span-4">
+                    <Label>Payment Milestones</Label>
+                    {clientMilestones.map((m, i) => (
+                      <div key={i} className="flex items-center gap-2">
+                        <Input
+                          type="number"
+                          min="0" max="100"
+                          placeholder="% Complete"
+                          value={m.percent}
+                          onChange={(e) => {
+                            const updated = [...clientMilestones]
+                            updated[i] = { ...updated[i], percent: e.target.value }
+                            setClientMilestones(updated)
+                          }}
+                          className="w-28"
+                        />
+                        <span className="text-sm text-muted-foreground">%</span>
+                        <Input
+                          type="number"
+                          placeholder="Amount"
+                          value={m.amount}
+                          onChange={(e) => {
+                            const updated = [...clientMilestones]
+                            updated[i] = { ...updated[i], amount: e.target.value }
+                            setClientMilestones(updated)
+                          }}
+                          className="flex-1"
+                        />
+                        {clientMilestones.length > 1 && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setClientMilestones(clientMilestones.filter((_, j) => j !== i))}
+                          >
+                            <Trash2 className="h-4 w-4 text-red-500" />
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setClientMilestones([...clientMilestones, { percent: "", amount: "" }])}
+                    >
+                      <Plus className="mr-1 h-3 w-3" /> Add Milestone
+                    </Button>
+                    <p className="text-sm text-blue-600">
+                      Total: {formatCurrency(clientMilestones.reduce((sum, m) => sum + (parseFloat(m.amount) || 0), 0))}
+                    </p>
+                  </div>
+                )}
               </div>
               {formData.clientPaymentType === "MONTHLY" && formData.clientPaymentAmount && formData.clientPaymentMonths && (
                 <p className="text-sm text-green-600 mt-2">
@@ -525,7 +608,7 @@ export function DealsPage() {
               <p className="text-sm text-muted-foreground mb-3">
                 Commission paid to the source who brought you this project. For MONTHLY, enter the amount per month.
               </p>
-              <div className="grid gap-4 md:grid-cols-3">
+              <div className="grid gap-6 md:grid-cols-4">
                 <div className="space-y-2">
                   <Label htmlFor="commissionType">Commission Type</Label>
                   <Select
@@ -539,6 +622,7 @@ export function DealsPage() {
                       <SelectItem value="ONE_TIME">One-Time</SelectItem>
                       <SelectItem value="MONTHLY">Monthly</SelectItem>
                       <SelectItem value="PERCENTAGE">Percentage</SelectItem>
+                      <SelectItem value="MULTI_PAYMENT">Multi Payments</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -600,6 +684,60 @@ export function DealsPage() {
                     />
                   </div>
                 )}
+                {formData.commissionType === "MULTI_PAYMENT" && (
+                  <div className="space-y-3 md:col-span-4">
+                    <Label>Commission Milestones</Label>
+                    {commissionMilestones.map((m, i) => (
+                      <div key={i} className="flex items-center gap-2">
+                        <Input
+                          type="number"
+                          min="0" max="100"
+                          placeholder="% Complete"
+                          value={m.percent}
+                          onChange={(e) => {
+                            const updated = [...commissionMilestones]
+                            updated[i] = { ...updated[i], percent: e.target.value }
+                            setCommissionMilestones(updated)
+                          }}
+                          className="w-28"
+                        />
+                        <span className="text-sm text-muted-foreground">%</span>
+                        <Input
+                          type="number"
+                          placeholder="Amount"
+                          value={m.amount}
+                          onChange={(e) => {
+                            const updated = [...commissionMilestones]
+                            updated[i] = { ...updated[i], amount: e.target.value }
+                            setCommissionMilestones(updated)
+                          }}
+                          className="flex-1"
+                        />
+                        {commissionMilestones.length > 1 && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setCommissionMilestones(commissionMilestones.filter((_, j) => j !== i))}
+                          >
+                            <Trash2 className="h-4 w-4 text-red-500" />
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCommissionMilestones([...commissionMilestones, { percent: "", amount: "" }])}
+                    >
+                      <Plus className="mr-1 h-3 w-3" /> Add Milestone
+                    </Button>
+                    <p className="text-sm text-orange-600">
+                      Total: {formatCurrency(commissionMilestones.reduce((sum, m) => sum + (parseFloat(m.amount) || 0), 0))}
+                    </p>
+                  </div>
+                )}
               </div>
               {formData.commissionType === "MONTHLY" && formData.commissionValue && formData.commissionMonths && (
                 <p className="text-sm text-orange-600 mt-2">
@@ -617,11 +755,11 @@ export function DealsPage() {
             <div className="border-t pt-4">
               <h4 className="font-medium mb-1">Partner Payment (Eddie pays Partner)</h4>
               <p className="text-sm text-muted-foreground mb-3">
-                {formData.partnerPaymentType === "MONTHLY" 
+                {formData.partnerPaymentType === "MONTHLY"
                   ? "Enter the <strong>monthly payment amount</strong>. This amount will be paid to the partner each month."
                   : "Enter the <strong>total payment amount</strong> for one-time payment."}
               </p>
-              <div className="grid gap-4 md:grid-cols-3">
+              <div className="grid gap-6 md:grid-cols-4">
                 <div className="space-y-2">
                   <Label htmlFor="partnerCost">
                     {formData.partnerPaymentType === "MONTHLY" ? "Monthly Amount" : "Payment Amount"}
@@ -646,6 +784,7 @@ export function DealsPage() {
                     <SelectContent>
                       <SelectItem value="ONE_TIME">One-Time</SelectItem>
                       <SelectItem value="MONTHLY">Monthly</SelectItem>
+                      <SelectItem value="MULTI_PAYMENT">Multi Payments</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -684,6 +823,60 @@ export function DealsPage() {
                     </div>
                   </>
                 )}
+                {formData.partnerPaymentType === "MULTI_PAYMENT" && (
+                  <div className="space-y-3 md:col-span-4">
+                    <Label>Partner Milestones</Label>
+                    {partnerMilestones.map((m, i) => (
+                      <div key={i} className="flex items-center gap-2">
+                        <Input
+                          type="number"
+                          min="0" max="100"
+                          placeholder="% Complete"
+                          value={m.percent}
+                          onChange={(e) => {
+                            const updated = [...partnerMilestones]
+                            updated[i] = { ...updated[i], percent: e.target.value }
+                            setPartnerMilestones(updated)
+                          }}
+                          className="w-28"
+                        />
+                        <span className="text-sm text-muted-foreground">%</span>
+                        <Input
+                          type="number"
+                          placeholder="Amount"
+                          value={m.amount}
+                          onChange={(e) => {
+                            const updated = [...partnerMilestones]
+                            updated[i] = { ...updated[i], amount: e.target.value }
+                            setPartnerMilestones(updated)
+                          }}
+                          className="flex-1"
+                        />
+                        {partnerMilestones.length > 1 && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setPartnerMilestones(partnerMilestones.filter((_, j) => j !== i))}
+                          >
+                            <Trash2 className="h-4 w-4 text-red-500" />
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPartnerMilestones([...partnerMilestones, { percent: "", amount: "" }])}
+                    >
+                      <Plus className="mr-1 h-3 w-3" /> Add Milestone
+                    </Button>
+                    <p className="text-sm text-purple-600">
+                      Total: {formatCurrency(partnerMilestones.reduce((sum, m) => sum + (parseFloat(m.amount) || 0), 0))}
+                    </p>
+                  </div>
+                )}
               </div>
               {formData.partnerPaymentType === "MONTHLY" && formData.partnerCost && formData.partnerPaymentMonths && (
                 <p className="text-sm text-purple-600 mt-2">
@@ -705,7 +898,7 @@ export function DealsPage() {
             </div>
 
             {/* Profit Summary */}
-            {formData.clientPaymentAmount && (
+            {(formData.clientPaymentAmount || formData.clientPaymentType === "MULTI_PAYMENT") && (
               <div className="border-t pt-4">
                 <h4 className="font-medium mb-2">Deal Summary</h4>
                 <div className="bg-muted/50 rounded-lg p-4 space-y-2 text-sm">
@@ -713,9 +906,11 @@ export function DealsPage() {
                     <span>Client pays Eddie:</span>
                     <span className="font-medium text-green-600">
                       +{formatCurrency(
-                        formData.clientPaymentType === "MONTHLY"
-                          ? (parseFloat(formData.clientPaymentAmount) || 0) * (parseInt(formData.clientPaymentMonths) || 1)
-                          : (parseFloat(formData.clientPaymentAmount) || 0)
+                        formData.clientPaymentType === "MULTI_PAYMENT"
+                          ? clientMilestones.reduce((sum, m) => sum + (parseFloat(m.amount) || 0), 0)
+                          : formData.clientPaymentType === "MONTHLY"
+                            ? (parseFloat(formData.clientPaymentAmount) || 0) * (parseInt(formData.clientPaymentMonths) || 1)
+                            : (parseFloat(formData.clientPaymentAmount) || 0)
                       )}
                     </span>
                   </div>
@@ -723,9 +918,11 @@ export function DealsPage() {
                     <span>Partner cost:</span>
                     <span className="font-medium text-orange-600">
                       -{formatCurrency(
-                        formData.partnerPaymentType === "MONTHLY"
-                          ? (parseFloat(formData.partnerCost) || 0) * (parseInt(formData.partnerPaymentMonths) || 1)
-                          : (parseFloat(formData.partnerCost) || 0)
+                        formData.partnerPaymentType === "MULTI_PAYMENT"
+                          ? partnerMilestones.reduce((sum, m) => sum + (parseFloat(m.amount) || 0), 0)
+                          : formData.partnerPaymentType === "MONTHLY"
+                            ? (parseFloat(formData.partnerCost) || 0) * (parseInt(formData.partnerPaymentMonths) || 1)
+                            : (parseFloat(formData.partnerCost) || 0)
                       )}
                     </span>
                   </div>
@@ -733,49 +930,50 @@ export function DealsPage() {
                     <span>Source commission:</span>
                     <span className="font-medium text-yellow-600">
                       -{formatCurrency(
-                        formData.commissionType === "PERCENTAGE"
-                          ? ((parseFloat(formData.clientPaymentAmount) || 0) * (parseInt(formData.clientPaymentMonths) || 1)) * (parseFloat(formData.commissionValue) || 0) / 100
-                          : formData.commissionType === "MONTHLY"
-                            ? (parseFloat(formData.commissionValue) || 0) * (parseInt(formData.commissionMonths) || 1)
-                            : (parseFloat(formData.commissionValue) || 0)
+                        formData.commissionType === "MULTI_PAYMENT"
+                          ? commissionMilestones.reduce((sum, m) => sum + (parseFloat(m.amount) || 0), 0)
+                          : formData.commissionType === "PERCENTAGE"
+                            ? (() => {
+                              const ct = formData.clientPaymentType === "MULTI_PAYMENT"
+                                ? clientMilestones.reduce((sum, m) => sum + (parseFloat(m.amount) || 0), 0)
+                                : formData.clientPaymentType === "MONTHLY"
+                                  ? (parseFloat(formData.clientPaymentAmount) || 0) * (parseInt(formData.clientPaymentMonths) || 1)
+                                  : (parseFloat(formData.clientPaymentAmount) || 0);
+                              return ct * (parseFloat(formData.commissionValue) || 0) / 100
+                            })()
+                            : formData.commissionType === "MONTHLY"
+                              ? (parseFloat(formData.commissionValue) || 0) * (parseInt(formData.commissionMonths) || 1)
+                              : (parseFloat(formData.commissionValue) || 0)
                       )}
                     </span>
                   </div>
                   <div className="border-t pt-2 flex justify-between font-bold">
                     <span>Your Profit:</span>
-                    <span className={
-                      (() => {
-                        const clientTotal = formData.clientPaymentType === "MONTHLY"
+                    {(() => {
+                      const clientTotal = formData.clientPaymentType === "MULTI_PAYMENT"
+                        ? clientMilestones.reduce((sum, m) => sum + (parseFloat(m.amount) || 0), 0)
+                        : formData.clientPaymentType === "MONTHLY"
                           ? (parseFloat(formData.clientPaymentAmount) || 0) * (parseInt(formData.clientPaymentMonths) || 1)
                           : (parseFloat(formData.clientPaymentAmount) || 0)
-                        const partnerTotal = formData.partnerPaymentType === "MONTHLY"
+                      const partnerTotal = formData.partnerPaymentType === "MULTI_PAYMENT"
+                        ? partnerMilestones.reduce((sum, m) => sum + (parseFloat(m.amount) || 0), 0)
+                        : formData.partnerPaymentType === "MONTHLY"
                           ? (parseFloat(formData.partnerCost) || 0) * (parseInt(formData.partnerPaymentMonths) || 1)
                           : (parseFloat(formData.partnerCost) || 0)
-                        const commissionTotal = formData.commissionType === "PERCENTAGE"
+                      const commissionTotal = formData.commissionType === "MULTI_PAYMENT"
+                        ? commissionMilestones.reduce((sum, m) => sum + (parseFloat(m.amount) || 0), 0)
+                        : formData.commissionType === "PERCENTAGE"
                           ? clientTotal * (parseFloat(formData.commissionValue) || 0) / 100
                           : formData.commissionType === "MONTHLY"
                             ? (parseFloat(formData.commissionValue) || 0) * (parseInt(formData.commissionMonths) || 1)
                             : (parseFloat(formData.commissionValue) || 0)
-                        return clientTotal - partnerTotal - commissionTotal >= 0 ? "text-green-600" : "text-red-600"
-                      })()
-                    }>
-                      {formatCurrency(
-                        (() => {
-                          const clientTotal = formData.clientPaymentType === "MONTHLY"
-                            ? (parseFloat(formData.clientPaymentAmount) || 0) * (parseInt(formData.clientPaymentMonths) || 1)
-                            : (parseFloat(formData.clientPaymentAmount) || 0)
-                          const partnerTotal = formData.partnerPaymentType === "MONTHLY"
-                            ? (parseFloat(formData.partnerCost) || 0) * (parseInt(formData.partnerPaymentMonths) || 1)
-                            : (parseFloat(formData.partnerCost) || 0)
-                          const commissionTotal = formData.commissionType === "PERCENTAGE"
-                            ? clientTotal * (parseFloat(formData.commissionValue) || 0) / 100
-                            : formData.commissionType === "MONTHLY"
-                              ? (parseFloat(formData.commissionValue) || 0) * (parseInt(formData.commissionMonths) || 1)
-                              : (parseFloat(formData.commissionValue) || 0)
-                          return clientTotal - partnerTotal - commissionTotal
-                        })()
-                      )}
-                    </span>
+                      const profit = clientTotal - partnerTotal - commissionTotal
+                      return (
+                        <span className={profit >= 0 ? "text-green-600" : "text-red-600"}>
+                          {formatCurrency(profit)}
+                        </span>
+                      )
+                    })()}
                   </div>
                 </div>
               </div>

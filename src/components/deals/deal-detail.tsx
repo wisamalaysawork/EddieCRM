@@ -82,6 +82,9 @@ interface DealDetailData {
   partnerPaymentDueDate: string | null
   partnerPaymentMonths: number | null
   partnerPaymentStartDate: string | null
+  clientProgressMilestones: string | null
+  commissionProgressMilestones: string | null
+  partnerProgressMilestones: string | null
   notes: string | null
   commissionAmount: number
   paidCommissions: number
@@ -91,6 +94,9 @@ interface DealDetailData {
   paidClientPayments: number
   remainingClientPayments: number
   profit: number
+  startDate: string | null
+  endDate: string | null
+  assignedUser?: { name: string } | null
   client?: {
     id: string
     name: string
@@ -183,6 +189,8 @@ export function DealDetail({ params }: { params: Promise<{ id: string }> }) {
       partnerPaymentDueDate: "",
       partnerPaymentMonths: "",
       partnerPaymentStartDate: "",
+      startDate: "",
+      endDate: "",
     }
     return {
       name: deal.name,
@@ -206,6 +214,8 @@ export function DealDetail({ params }: { params: Promise<{ id: string }> }) {
       partnerPaymentDueDate: deal.partnerPaymentDueDate ? deal.partnerPaymentDueDate.split('T')[0] : "",
       partnerPaymentMonths: deal.partnerPaymentMonths?.toString() || "",
       partnerPaymentStartDate: deal.partnerPaymentStartDate ? deal.partnerPaymentStartDate.split('T')[0] : "",
+      startDate: deal.startDate ? deal.startDate.split('T')[0] : "",
+      endDate: deal.endDate ? deal.endDate.split('T')[0] : "",
     }
   }, [deal])
 
@@ -244,7 +254,7 @@ export function DealDetail({ params }: { params: Promise<{ id: string }> }) {
         notes: data.notes || null,
         sourceId: data.sourceId || undefined,
         partnerId: data.partnerId || undefined,
-        sourcePaymentAmount: data.sourcePaymentAmount ? parseFloat(data.sourcePaymentAmount) : undefined,
+        clientPaymentAmount: data.clientPaymentAmount ? parseFloat(data.clientPaymentAmount) : undefined,
         partnerCost: data.partnerCost ? parseFloat(data.partnerCost) : undefined,
         commissionType: data.commissionType,
         commissionValue: data.commissionValue ? parseFloat(data.commissionValue) : undefined,
@@ -434,8 +444,8 @@ export function DealDetail({ params }: { params: Promise<{ id: string }> }) {
   const totalCommissionRemaining = sourcePayments
     .filter((p) => p.status !== "PAID")
     .reduce((sum, p) => sum + p.amount, 0)
-  const commissionProgress = deal.commissionAmount > 0 
-    ? (totalCommissionPaid / deal.commissionAmount) * 100 
+  const commissionProgress = deal.commissionAmount > 0
+    ? (totalCommissionPaid / deal.commissionAmount) * 100
     : 0
 
   const totalPartnerPaid = partnerPayments
@@ -491,7 +501,7 @@ export function DealDetail({ params }: { params: Promise<{ id: string }> }) {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {formatCurrency(deal.sourcePaymentAmount)}
+              {formatCurrency(deal.clientPaymentAmount)}
             </div>
           </CardContent>
         </Card>
@@ -539,7 +549,7 @@ export function DealDetail({ params }: { params: Promise<{ id: string }> }) {
               {formatCurrency(deal.profit)}
             </div>
             <p className="text-xs text-muted-foreground">
-              {((deal.profit / deal.sourcePaymentAmount) * 100).toFixed(1)}% margin
+              {((deal.profit / deal.clientPaymentAmount) * 100).toFixed(1)}% margin
             </p>
           </CardContent>
         </Card>
@@ -555,11 +565,13 @@ export function DealDetail({ params }: { params: Promise<{ id: string }> }) {
                 Commission Summary (Paid to Source)
               </CardTitle>
               <CardDescription>
-                {deal.commissionType === "PERCENTAGE" 
+                {deal.commissionType === "PERCENTAGE"
                   ? `${deal.commissionValue}% of source payment`
                   : deal.commissionType === "MONTHLY"
-                  ? `Monthly: ${formatCurrency(deal.commissionValue)} for ${deal.commissionMonths || 12} months`
-                  : "One-time commission"}
+                    ? `Monthly: ${formatCurrency(deal.commissionValue)} for ${deal.commissionMonths || 12} months`
+                    : deal.commissionType === "MULTI_PAYMENT"
+                      ? "Multi-payments based on milestones"
+                      : "One-time commission"}
               </CardDescription>
             </div>
             <Button variant="outline" size="sm" onClick={() => setIsCommissionEditOpen(true)}>
@@ -584,7 +596,7 @@ export function DealDetail({ params }: { params: Promise<{ id: string }> }) {
                 <p className="text-xl font-bold text-yellow-600">{formatCurrency(totalCommissionRemaining)}</p>
               </div>
             </div>
-            
+
             <div className="space-y-2">
               <div className="flex justify-between text-sm">
                 <span>Progress</span>
@@ -606,14 +618,14 @@ export function DealDetail({ params }: { params: Promise<{ id: string }> }) {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <p className="text-sm text-muted-foreground">Source</p>
-                <Link href={`/sources/${deal.source.id}`} className="font-medium hover:underline">
-                  {deal.source.name}
+                <Link href={`/sources/${deal.source?.id}`} className="font-medium hover:underline">
+                  {deal.source?.name}
                 </Link>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Partner</p>
-                <Link href={`/partners/${deal.partner.id}`} className="font-medium hover:underline">
-                  {deal.partner.name}
+                <Link href={`/partners/${deal.partner?.id}`} className="font-medium hover:underline">
+                  {deal.partner?.name}
                 </Link>
               </div>
               <div>
@@ -660,7 +672,7 @@ export function DealDetail({ params }: { params: Promise<{ id: string }> }) {
                 <p className="text-xs text-muted-foreground">payments made</p>
               </div>
             </div>
-            
+
             {partnerPayments.length > 0 && (
               <div className="mt-4 pt-4 border-t space-y-2">
                 <p className="text-sm font-medium">Partner Payment Progress</p>
@@ -668,9 +680,9 @@ export function DealDetail({ params }: { params: Promise<{ id: string }> }) {
                   <span>Paid: {formatCurrency(totalPartnerPaid)}</span>
                   <span>Remaining: {formatCurrency(totalPartnerRemaining)}</span>
                 </div>
-                <Progress 
-                  value={deal.partnerCost > 0 ? (totalPartnerPaid / deal.partnerCost) * 100 : 0} 
-                  className="h-2" 
+                <Progress
+                  value={deal.partnerCost > 0 ? (totalPartnerPaid / deal.partnerCost) * 100 : 0}
+                  className="h-2"
                 />
               </div>
             )}
@@ -683,7 +695,7 @@ export function DealDetail({ params }: { params: Promise<{ id: string }> }) {
         <Card>
           <CardHeader>
             <CardTitle>Source Commission Payments</CardTitle>
-            <CardDescription>Commission payments to {deal.source.name}</CardDescription>
+            <CardDescription>Commission payments to {deal.source?.name}</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="border rounded-lg overflow-hidden">
@@ -740,7 +752,7 @@ export function DealDetail({ params }: { params: Promise<{ id: string }> }) {
       <Card>
         <CardHeader>
           <CardTitle>Partner Payments</CardTitle>
-          <CardDescription>Payments to {deal.partner.name}</CardDescription>
+          <CardDescription>Payments to {deal.partner?.name}</CardDescription>
         </CardHeader>
         <CardContent>
           {partnerPayments.length > 0 ? (
@@ -889,12 +901,12 @@ export function DealDetail({ params }: { params: Promise<{ id: string }> }) {
               <h4 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">Financial Details</h4>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="sourcePaymentAmount">Source Payment Amount ($)</Label>
+                  <Label htmlFor="clientPaymentAmount">Client Payment Amount ($)</Label>
                   <Input
-                    id="sourcePaymentAmount"
+                    id="clientPaymentAmount"
                     type="number"
-                    value={formData.sourcePaymentAmount}
-                    onChange={(e) => setFormData({ ...formData, sourcePaymentAmount: e.target.value })}
+                    value={formData.clientPaymentAmount}
+                    onChange={(e) => setFormData({ ...formData, clientPaymentAmount: e.target.value })}
                   />
                 </div>
                 <div className="space-y-2">
@@ -924,6 +936,7 @@ export function DealDetail({ params }: { params: Promise<{ id: string }> }) {
                     <SelectContent>
                       <SelectItem value="ONE_TIME">One-Time</SelectItem>
                       <SelectItem value="MONTHLY">Monthly</SelectItem>
+                      <SelectItem value="MULTI_PAYMENT">Multi Payments</SelectItem>
                       <SelectItem value="PERCENTAGE">Percentage</SelectItem>
                     </SelectContent>
                   </Select>
@@ -1016,6 +1029,7 @@ export function DealDetail({ params }: { params: Promise<{ id: string }> }) {
                 <SelectContent>
                   <SelectItem value="ONE_TIME">One-Time</SelectItem>
                   <SelectItem value="MONTHLY">Monthly</SelectItem>
+                  <SelectItem value="MULTI_PAYMENT">Multi Payments</SelectItem>
                   <SelectItem value="PERCENTAGE">Percentage</SelectItem>
                 </SelectContent>
               </Select>

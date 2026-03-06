@@ -30,18 +30,21 @@ enum CommissionType {
   ONE_TIME
   MONTHLY
   PERCENTAGE
+  MULTI_PAYMENT
 }
 
 // Partner payment types
 enum PartnerPaymentType {
   ONE_TIME
   MONTHLY
+  MULTI_PAYMENT
 }
 
 // Client payment types (how client pays Eddie)
 enum ClientPaymentType {
   ONE_TIME
   MONTHLY
+  MULTI_PAYMENT
 }
 
 // Payment types
@@ -133,6 +136,11 @@ model Deal {
   partnerPaymentDueDate   DateTime?           // For one-time payment
   partnerPaymentMonths    Int?                // Number of months for monthly payment
   partnerPaymentStartDate DateTime?           // First payment date for monthly
+  
+  // Multi-payment milestones (JSON arrays of {percent, amount})
+  clientProgressMilestones  String?
+  commissionProgressMilestones String?
+  partnerProgressMilestones String?
   
   // Internal notes
   notes                   String?
