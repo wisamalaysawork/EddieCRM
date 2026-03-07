@@ -207,36 +207,9 @@ export function Dashboard() {
         ))}
       </div>
 
-      <div className="grid gap-8 lg:grid-cols-3">
-        {/* Contacts Column */}
-        <motion.div variants={item} className="space-y-6">
-          <h2 className="text-2xl font-heading mb-4 border-l-4 border-slate-900 dark:border-white pl-4">Network</h2>
-          <div className="grid gap-4">
-            {[
-              { label: "End Clients", value: dashboardData?.totalClients || 0, icon: UserCircle, sub: "Direct entities" },
-              { label: "Project Sources", value: dashboardData?.totalSources || 0, icon: Users, sub: "Referral partners" },
-              { label: "Operation Partners", value: dashboardData?.totalPartners || 0, icon: Building2, sub: "Execution teams" },
-            ].map((item, i) => (
-              <Card key={i} className="glass-card hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors">
-                <CardContent className="p-4 flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="p-2 rounded-full bg-slate-100 dark:bg-slate-800">
-                      <item.icon className="w-5 h-5 text-slate-600" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium">{item.label}</p>
-                      <p className="text-xs text-muted-foreground">{item.sub}</p>
-                    </div>
-                  </div>
-                  <div className="text-2xl font-heading">{item.value}</div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </motion.div>
-
+      <div className="flex flex-col gap-8">
         {/* Status Highlights */}
-        <motion.div variants={item} className="lg:col-span-2 space-y-6">
+        <motion.div variants={item} className="space-y-6">
           <h2 className="text-2xl font-heading mb-4 border-l-4 border-slate-900 dark:border-white pl-4">Priority Actions</h2>
 
           <div className="grid gap-4 md:grid-cols-2">
@@ -283,6 +256,33 @@ export function Dashboard() {
                 </div>
               </CardContent>
             </Card>
+          </div>
+        </motion.div>
+
+        {/* Contacts Column */}
+        <motion.div variants={item} className="space-y-6">
+          <h2 className="text-2xl font-heading mb-4 border-l-4 border-slate-900 dark:border-white pl-4">Network</h2>
+          <div className="grid gap-4 md:grid-cols-3">
+            {[
+              { label: "End Clients", value: dashboardData?.totalClients || 0, icon: UserCircle, sub: "Direct entities" },
+              { label: "Project Sources", value: dashboardData?.totalSources || 0, icon: Users, sub: "Referral partners" },
+              { label: "Operation Partners", value: dashboardData?.totalPartners || 0, icon: Building2, sub: "Execution teams" },
+            ].map((item, i) => (
+              <Card key={i} className="glass-card hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors">
+                <CardContent className="p-4 flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="p-2 rounded-full bg-slate-100 dark:bg-slate-800">
+                      <item.icon className="w-5 h-5 text-slate-600" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">{item.label}</p>
+                      <p className="text-xs text-muted-foreground">{item.sub}</p>
+                    </div>
+                  </div>
+                  <div className="text-2xl font-heading">{item.value}</div>
+                </CardContent>
+              </Card>
+            ))}
           </div>
         </motion.div>
       </div>
